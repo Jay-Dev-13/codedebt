@@ -1,0 +1,24 @@
+{
+  "name": "codedebt",
+  "version": "1.0.0",
+  "description": "AI Agent for detecting code debt based on project opinions",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "demo": "ts-node src/index.ts --demo"
+  },
+  "keywords": ["code-debt", "ai", "analysis"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
