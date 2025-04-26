@@ -18,6 +18,8 @@
   "license": "ISC",
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
+    "@langchain/core": "^0.3.49",
+    "@langchain/langgraph": "^0.2.67",
     "axios": "^1.6.7",
     "dotenv": "^16.4.5"
   },

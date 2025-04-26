@@ -1,45 +1,33 @@
 import * as path from "path";
-import * as fs from "fs";
 import CodeDebtAgent from "./agent";
 import { LLMProviderType } from "./llm/LLMFactory";
+import { FileUtils } from "./utils";
 
-function writeResultsToFile(results: string, filename: string) {
-	const resultsDir = path.join(process.cwd(), "results");
-	if (!fs.existsSync(resultsDir)) {
-		fs.mkdirSync(resultsDir);
-	}
-	const filePath = path.join(resultsDir, filename);
-	fs.writeFileSync(filePath, results);
-	return filePath;
-}
+
 
 async function analyzeSingleFile(filePath: string) {
 	try {
 		const agent = new CodeDebtAgent(LLMProviderType.Gemini);
-		console.log(`Analyzing demo file: ${filePath}`);
-
+		
+		console.info(`Analyzing demo file: ${filePath}`);
 		const analysis = await agent.analyzeFile(filePath);
+		console.info(`Analysis complete for: ${filePath}`);
 
-		const results = [
-			"Code Debt Analysis Results:",
-			"==========================\n",
-			`File: ${path.relative(process.cwd(), filePath)}`,
-			"------------------------",
-			analysis
-		].join("\n");
-
-		const outputPath = writeResultsToFile(results, "single_file_analysis.md");
-		console.log(`Analysis results have been saved to: ${outputPath}`);
+		const outputPath = FileUtils.writeResultsToFile(analysis, filePath, "single_file_analysis.md");
+		console.info(`Analysis results have been saved to: ${outputPath}`);
 	} catch (error) {
 		console.error("Error analyzing demo file:", error);
 		process.exit(1);
 	}
 }
 
+// Note: This function is not used in the current implementation
+// TODO: Output from each file should be saved to a separate file
 async function analyzeCodebase(directory: string) {
 	try {
-		const agent = new CodeDebtAgent();
-		console.log(`Analyzing codebase in: ${directory}`);
+		const agent = new CodeDebtAgent(LLMProviderType.Gemini);
+
+		console.info(`Analyzing codebase in: ${directory}`);
 		const results = await agent.analyzeCodebase(directory);
 
 		const output = ["Code Debt Analysis Results:", "==========================\n"];
@@ -53,17 +41,17 @@ async function analyzeCodebase(directory: string) {
 			);
 		}
 
-		const outputPath = writeResultsToFile(output.join("\n"), "codebase_analysis.txt");
-		console.log(`Analysis results have been saved to: ${outputPath}`);
+		const outputPath = FileUtils.writeResultsToFile(output.join("\n"), directory, "codebase_analysis.txt");
+		console.info(`Analysis results have been saved to: ${outputPath}`);
 	} catch (error) {
 		console.error("Error running code debt analysis:", error);
 		process.exit(1);
 	}
 }
 
-const demoFile = path.join(__dirname, "demo", "calculator.ts");
 
 if (process.argv[2] === "--demo") {
+	const demoFile = path.join(__dirname, "demo", "calculator.ts");
 	analyzeSingleFile(demoFile);
 } else {
 	const targetDirectory = process.argv[2] || process.cwd();
