@@ -9,10 +9,15 @@
     "dev": "ts-node src/index.ts",
     "demo": "ts-node src/index.ts --demo"
   },
-  "keywords": ["code-debt", "ai", "analysis"],
+  "keywords": [
+    "code-debt",
+    "ai",
+    "analysis"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "axios": "^1.6.7",
     "dotenv": "^16.4.5"
   },

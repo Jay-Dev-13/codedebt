@@ -6,18 +6,13 @@ import { LLMProvider } from "./llm/LLMProvider";
 
 dotenv.config();
 
-interface OllamaResponse {
-	response: string;
-	done: boolean;
-}
-
 class CodeDebtAgent {
 	private llmProvider: LLMProvider;
 	private opinions: string;
 	private totalFiles: number = 0;
 	private processedFiles: number = 0;
 
-	constructor(providerType: LLMProviderType = "ollama", options: any = {}) {
+	constructor(providerType: LLMProviderType = LLMProviderType.Ollama, options: any = {}) {
 		this.llmProvider = LLMFactory.createProvider(providerType, options);
 		this.opinions = this.loadOpinions();
 	}
@@ -38,7 +33,8 @@ class CodeDebtAgent {
                 You are a code debt analyzer. Analyze the following code based on these project opinions and standards:
                 ${this.opinions}
                 
-                Provide a detailed analysis of the code in ${filePath}, highlighting any violations of these standards and suggesting improvements.
+                Provide a summary of the code in ${filePath}, highlighting any violations of these standards and suggesting improvements.
+                Make sure to be concise and to the point.
                 
                 Here's the code to analyze:
                 ${content}
