@@ -1,6 +1,6 @@
+import { GeminiProvider } from "./GeminiProvider";
 import { LLMProvider } from "./LLMProvider";
 import { OllamaProvider } from "./OllamaProvider";
-import { GeminiProvider } from "./GeminiProvider";
 
 export enum LLMProviderType {
 	Ollama = "ollama",
@@ -8,18 +8,12 @@ export enum LLMProviderType {
 }
 
 export class LLMFactory {
-	static createProvider(type: LLMProviderType, options: any = {}): LLMProvider {
+	static createProvider(type: LLMProviderType): LLMProvider {
 		switch (type) {
 			case LLMProviderType.Ollama:
-				return new OllamaProvider(
-					options.baseUrl || process.env.OLLAMA_BASE_URL,
-					options.model || process.env.OLLAMA_MODEL
-				);
+				return new OllamaProvider(process.env.OLLAMA_BASE_URL, process.env.OLLAMA_MODEL);
 			case LLMProviderType.Gemini:
-				return new GeminiProvider(
-					options.apiKey || process.env.GEMINI_API_KEY,
-					options.model || process.env.GEMINI_MODEL
-				);
+				return new GeminiProvider(process.env.GEMINI_API_KEY, process.env.GEMINI_MODEL);
 			default:
 				throw new Error(`Unknown LLM provider type: ${type}`);
 		}

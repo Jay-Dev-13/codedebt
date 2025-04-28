@@ -1,31 +1,32 @@
 {
-  "name": "codedebt",
-  "version": "1.0.0",
-  "description": "AI Agent for detecting code debt based on project opinions",
-  "main": "dist/index.js",
-  "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
-    "demo": "ts-node src/index.ts --demo"
-  },
-  "keywords": [
-    "code-debt",
-    "ai",
-    "analysis"
-  ],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@google/generative-ai": "^0.24.0",
-    "@langchain/core": "^0.3.49",
-    "@langchain/langgraph": "^0.2.67",
-    "axios": "^1.6.7",
-    "dotenv": "^16.4.5"
-  },
-  "devDependencies": {
-    "@types/node": "^20.11.24",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
-  }
+	"name": "codedebt",
+	"version": "1.0.0",
+	"description": "AI Agent for detecting code debt based on project opinions",
+	"main": "dist/index.js",
+	"scripts": {
+		"build": "tsc",
+		"start": "node dist/index.js",
+		"dev": "ts-node src/index.ts"
+	},
+	"keywords": [
+		"code-debt",
+		"ai",
+		"analysis"
+	],
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"@google/generative-ai": "^0.24.0",
+		"@langchain/core": "^0.3.49",
+		"@langchain/langgraph": "^0.2.67",
+		"@types/glob": "^8.1.0",
+		"axios": "^1.6.7",
+		"dotenv": "^16.4.5",
+		"glob": "^11.0.2"
+	},
+	"devDependencies": {
+		"@types/node": "^20.11.24",
+		"ts-node": "^10.9.2",
+		"typescript": "^5.3.3"
+	}
 }
