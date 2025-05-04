@@ -17,6 +17,7 @@ import { join } from "path";
 import { PROMPTS } from "../common/prompts";
 import { LLMFactory, LLMProviderType } from "../llm/LLMFactory";
 import { LLMProvider } from "../llm/LLMProvider";
+import { DocumentAnalysis } from "../rag/vector";
 
 interface AnalysisState {
 	analyzedFiles: string[];
@@ -28,6 +29,7 @@ interface FileAnalysis {
 	filePath: string;
 	analysis: string | { error: string };
 	timestamp: string;
+	similarChunks?: string[];
 }
 
 interface ProgressCallback {
@@ -42,6 +44,7 @@ export class AnalysisAgent {
 	private resultsDir: string;
 	private opinions: string;
 	private progressCallback?: ProgressCallback;
+	private documentAnalysis?: DocumentAnalysis;
 
 	constructor(
 		opinions: string,
@@ -56,12 +59,14 @@ export class AnalysisAgent {
 		this.opinions = opinions;
 		this.progressCallback = progressCallback;
 
-		console.log("Opinions:", this.opinions);
-
 		this.state = {
 			analyzedFiles: [],
 			excludePatterns,
 		};
+	}
+
+	public setDocumentAnalysis(analysis: DocumentAnalysis) {
+		this.documentAnalysis = analysis;
 	}
 
 	private async loadState(): Promise<void> {
@@ -86,13 +91,18 @@ export class AnalysisAgent {
 		}
 	}
 
-	private async saveFileAnalysis(filePath: string, analysis: string | { error: string }): Promise<void> {
+	private async saveFileAnalysis(
+		filePath: string,
+		analysis: string | { error: string },
+		similarChunks?: string[]
+	): Promise<void> {
 		try {
 			await mkdir(this.resultsDir, { recursive: true });
 			const fileAnalysis: FileAnalysis = {
 				filePath,
 				analysis,
 				timestamp: new Date().toISOString(),
+				similarChunks,
 			};
 
 			// Create a safe filename from the file path
@@ -106,13 +116,25 @@ export class AnalysisAgent {
 	private async analyzeFile(filePath: string): Promise<void> {
 		try {
 			const content = await readFile(filePath, "utf-8");
-			const prompt = PROMPTS.CODE_DEBT_ANALYSIS(this.opinions, filePath, content);
+
+			// Get similar code chunks if document analysis is available
+			let similarChunks: string[] | undefined;
+			if (this.documentAnalysis) {
+				similarChunks = await this.documentAnalysis.retriever.retrieve(content, 3);
+				console.info(`Found ${similarChunks.length} similar code chunks for ${filePath}`);
+			}
+
+			const prompt = PROMPTS.CODE_DEBT_ANALYSIS(this.opinions, filePath, content, similarChunks);
 
 			const response = await this.llmProvider.generateResponse(prompt);
 
+			console.info("Got response from the LLM model.");
+
 			this.state.analyzedFiles.push(filePath);
-			await this.saveFileAnalysis(filePath, response.response);
+			await this.saveFileAnalysis(filePath, response.response, similarChunks);
 			await this.saveState();
+
+			console.info("Saved the response to the file system.");
 
 			// Report progress
 			if (this.progressCallback && this.state.totalFiles) {
@@ -129,6 +151,8 @@ export class AnalysisAgent {
 			await this.saveFileAnalysis(filePath, { error: "Failed to analyze file" });
 			await this.saveState();
 
+			console.info("Saved the error to the file system.");
+
 			// Report progress even if analysis fails
 			if (this.progressCallback && this.state.totalFiles) {
 				this.progressCallback({
@@ -142,7 +166,6 @@ export class AnalysisAgent {
 	}
 
 	private async *getNextFile(input: { directory: string; excludePatterns: string[] }): AsyncGenerator<string> {
-		console.log("Getting next file from:", input.directory);
 		const files = await glob(`${input.directory}/**/*.{ts,tsx,js,jsx}`, {
 			ignore: ["node_modules/**", "dist/**", ...input.excludePatterns],
 		});
@@ -172,8 +195,10 @@ export class AnalysisAgent {
 		}
 
 		for await (const file of this.getNextFile(input)) {
+			console.info(`Analyzing file: ${file}`);
 			await this.analyzeFile(file);
 		}
+		console.info("Analysis complete");
 	}
 
 	public async getResults(): Promise<Record<string, any>> {

@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 import path from "path";
-import { FileUtils } from "./common/utils";
 import { MasterAgent } from "./masterAgent";
+import { loadDocuments } from "./rag/vector";
 
 config();
 async function main() {
@@ -13,14 +13,17 @@ async function main() {
 			process.exit(1);
 		}
 
-		const masterAgent = new MasterAgent();
+		// Load and process documents
+		const documentAnalysis = await loadDocuments(targetDirectory, ["node_modules", "dist"]);
+		console.log(`Loaded ${documentAnalysis.chunks.length} code chunks`);
 
-		const result = await masterAgent.analyzeCodebase({
+		const masterAgent = new MasterAgent();
+		masterAgent.setDocumentAnalysis(documentAnalysis);
+
+		await masterAgent.analyzeCodebase({
 			directory: targetDirectory,
 			excludePatterns: ["node_modules", "dist"],
 		});
-
-		FileUtils.writeResultsToFile(result, targetDirectory, "results.md");
 	} catch (error) {
 		console.error("Error:", error);
 		process.exit(1);
