@@ -5,7 +5,7 @@ export enum GEMINI_MODELS {
 	Gemini2Flash = "gemini-2.0-flash",
 	Gemini2FlashLite = "gemini-2.0-flash-lite",
 	Gemini2Pro = "gemini-2.0-pro",
-	GeminiEmbeddingExp0307 = "embedding-001",
+	GeminiEmbedding001 = "embedding-001",
 }
 
 export class GeminiProvider implements LLMProvider {

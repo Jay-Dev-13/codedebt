@@ -1,0 +1,19 @@
+- Use a modular folder structure, separating configuration, source code, utilities, and type definitions into distinct directories for better maintainability and scalability
+
+- Use async iterators (e.g. for await (const doc of cursor) { … }) to process large result sets incrementally, supporting backpressure and keeping memory usage low
+
+- Configure an appropriate batch size (for example, .batchSize(500)) to balance network round trips against memory consumption when streaming documents
+
+- Wrap async operations in try/catch/**\*\*\*\***finally blocks and avoid unhandled promise rejections by cleaning up resources in finally
+
+- Adopt structured logging (using libraries like Pino or Winston) and route logs to a centralized system for real‑time alerting and easier debugging
+
+- Leverage Node.js streams for handling large file or data processing tasks to avoid buffering entire payloads in memory
+
+- Avoid synchronous APIs in production code; always use async methods (e.g., fs.promises) to keep the event loop unblocked
+
+RAG Vector Store
+
+- Batch Size Configuration - Expose .batchSize(n: number) on the cursor to tune throughput vs. memory.
+
+- Similarity Streaming - Return raw embeddings/documents, then map to higher‑level RetrievedChunk objects.

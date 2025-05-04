@@ -1,13 +1,3 @@
-/*
-    Note: You can rename this file and the agent to whatever you want.
-
-    This agent is responsible for summarizing the code debt analysis.
-    It will be used to generate a comprehensive report of the previous step (analysis of individual files).
-
-    The previous step (analysisAgent) should have saved the results in the results directory.
-    This agent will read the results and summarize them.
-*/
-
 import { readdir, readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { PROMPTS } from "../common/prompts";
@@ -15,25 +5,14 @@ import { FileUtils } from "../common/utils";
 import { LLMFactory, LLMProviderType } from "../llm/LLMFactory";
 import { LLMProvider } from "../llm/LLMProvider";
 import { AnalysisMetrics } from "../types";
-
-interface SummaryState {
-	lastSummaryTimestamp?: string;
-}
-
-interface FolderStructure {
-	name: string;
-	type: "file" | "directory";
-	children?: FolderStructure[];
-	metrics?: {
-		totalFiles: number;
-		totalIssues: number;
-		issuesByType: Record<string, number>;
-		issuesBySeverity: Record<string, number>;
-	};
-}
+import { FolderStructure } from "../types/index";
+import { CodeDebtSummarySchema } from "../types/schemas";
+import { LLMOutputValidator } from "../utils/validator";
+import { SummaryState } from "./types";
 
 export class SummaryAgent {
 	private llmProvider: LLMProvider;
+	private validator: LLMOutputValidator;
 	private state: SummaryState;
 	private baseDir: string;
 	private statePath: string;
@@ -41,6 +20,7 @@ export class SummaryAgent {
 
 	constructor(baseDir: string = "results/analysis") {
 		this.llmProvider = LLMFactory.createProvider(LLMProviderType.Gemini);
+		this.validator = new LLMOutputValidator(this.llmProvider);
 		this.baseDir = baseDir;
 		this.statePath = join(this.baseDir, "summary_state.json");
 		this.resultsDir = join(this.baseDir, "results");
@@ -92,21 +72,30 @@ export class SummaryAgent {
 		// Get analysis results
 		const analysisResults = await this.getAnalysisResults();
 
-		// Generate summary using LLM
+		// Generate summary using LLM with validation
 		const prompt = PROMPTS.CODE_DEBT_SUMMARY({
 			analysisResults,
 			metrics,
 			folderStructure,
 		});
-		const response = await this.llmProvider.generateResponse(prompt);
 
-		// Update state
-		this.state.lastSummaryTimestamp = new Date().toISOString();
-		await this.saveState();
+		try {
+			const validatedSummary = await this.validator.validateWithRetry(prompt, CodeDebtSummarySchema, {
+				maxRetries: 3,
+				retryDelay: 2000,
+			});
 
-		// Save summary to file
-		const summaryPath = FileUtils.writeResultsToFile(response.response, "summary.md");
+			// Update state
+			this.state.lastSummaryTimestamp = new Date().toISOString();
+			await this.saveState();
 
-		return summaryPath;
+			// Save summary to file (as markdown)
+			const summaryPath = FileUtils.writeResultsToFile(validatedSummary, "summary.md");
+
+			return summaryPath;
+		} catch (error) {
+			console.error("Failed to generate and validate summary:", error);
+			throw error;
+		}
 	}
 }

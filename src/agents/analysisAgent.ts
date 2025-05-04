@@ -17,8 +17,10 @@ import { join } from "path";
 import { PROMPTS } from "../common/prompts";
 import { LLMFactory, LLMProviderType } from "../llm/LLMFactory";
 import { LLMProvider } from "../llm/LLMProvider";
-import { DocumentAnalysis } from "../rag/vector";
-
+import { Logger } from "../logger";
+import { DocumentAnalysis } from "../rag/types";
+import { CodeDebtAnalysisSchema } from "../types/schemas";
+import { LLMOutputValidator } from "../utils/validator";
 interface AnalysisState {
 	analyzedFiles: string[];
 	excludePatterns: string[];
@@ -38,6 +40,7 @@ interface ProgressCallback {
 
 export class AnalysisAgent {
 	private llmProvider: LLMProvider;
+	private validator: LLMOutputValidator;
 	private state: AnalysisState;
 	private baseDir: string;
 	private statePath: string;
@@ -45,7 +48,7 @@ export class AnalysisAgent {
 	private opinions: string;
 	private progressCallback?: ProgressCallback;
 	private documentAnalysis?: DocumentAnalysis;
-
+	private logger: Logger;
 	constructor(
 		opinions: string,
 		excludePatterns: string[],
@@ -53,11 +56,13 @@ export class AnalysisAgent {
 		progressCallback?: ProgressCallback
 	) {
 		this.llmProvider = LLMFactory.createProvider(LLMProviderType.Gemini);
+		this.validator = new LLMOutputValidator(this.llmProvider);
 		this.baseDir = baseDir;
 		this.statePath = join(this.baseDir, "state.json");
 		this.resultsDir = join(this.baseDir, "results");
 		this.opinions = opinions;
 		this.progressCallback = progressCallback;
+		this.logger = new Logger("AnalysisAgent");
 
 		this.state = {
 			analyzedFiles: [],
@@ -70,6 +75,7 @@ export class AnalysisAgent {
 	}
 
 	private async loadState(): Promise<void> {
+		this.logger.info("Loading state...");
 		try {
 			const content = await readFile(this.statePath, "utf-8");
 			this.state = JSON.parse(content);
@@ -121,20 +127,31 @@ export class AnalysisAgent {
 			let similarChunks: string[] | undefined;
 			if (this.documentAnalysis) {
 				similarChunks = await this.documentAnalysis.retriever.retrieve(content, 3);
-				console.info(`Found ${similarChunks.length} similar code chunks for ${filePath}`);
+				this.logger.info(`Found ${similarChunks?.length ?? 0} similar code chunks for ${filePath}`);
 			}
 
 			const prompt = PROMPTS.CODE_DEBT_ANALYSIS(this.opinions, filePath, content, similarChunks);
 
-			const response = await this.llmProvider.generateResponse(prompt);
-
-			console.info("Got response from the LLM model.");
+			// Use the validator to ensure the response matches our schema
+			const validatedResponse = await this.validator.validateWithRetry(prompt, CodeDebtAnalysisSchema, {
+				maxRetries: 3,
+				retryDelay: 2000,
+				transformOutput: (output: string) => {
+					try {
+						// Try to extract JSON from the response if it's embedded in text
+						const jsonMatch = output.match(/\{[\s\S]*\}/);
+						return jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(output);
+					} catch {
+						throw new Error("Failed to parse LLM output as JSON");
+					}
+				},
+			});
 
 			this.state.analyzedFiles.push(filePath);
-			await this.saveFileAnalysis(filePath, response.response, similarChunks);
+			await this.saveFileAnalysis(filePath, JSON.stringify(validatedResponse, null, 2), similarChunks);
 			await this.saveState();
 
-			console.info("Saved the response to the file system.");
+			this.logger.info("Saved the validated response to the file system.");
 
 			// Report progress
 			if (this.progressCallback && this.state.totalFiles) {
@@ -146,12 +163,12 @@ export class AnalysisAgent {
 				});
 			}
 		} catch (error) {
-			console.error(`Error analyzing file ${filePath}:`, error);
+			this.logger.error(`Error analyzing file ${filePath}:`, error);
 			this.state.analyzedFiles.push(filePath);
-			await this.saveFileAnalysis(filePath, { error: "Failed to analyze file" });
+			await this.saveFileAnalysis(filePath, { error: error instanceof Error ? error.message : "Unknown error" });
 			await this.saveState();
 
-			console.info("Saved the error to the file system.");
+			this.logger.info("Saved the error to the file system.");
 
 			// Report progress even if analysis fails
 			if (this.progressCallback && this.state.totalFiles) {
@@ -194,11 +211,12 @@ export class AnalysisAgent {
 			});
 		}
 
+		this.logger.log("Starting to analyze files...");
 		for await (const file of this.getNextFile(input)) {
-			console.info(`Analyzing file: ${file}`);
+			this.logger.info(`Analyzing file: ${file}`);
 			await this.analyzeFile(file);
 		}
-		console.info("Analysis complete");
+		this.logger.info("Analysis complete");
 	}
 
 	public async getResults(): Promise<Record<string, any>> {

@@ -4,8 +4,10 @@ import path from "path";
 import { AnalysisAgent } from "./agents/analysisAgent";
 import { MetricsCompute } from "./agents/metricsCompute";
 import { SummaryAgent } from "./agents/summaryAgent";
-import { DocumentAnalysis } from "./rag/vector";
+import { Logger } from "./logger";
+import { DocumentAnalysis } from "./rag/types";
 import { AnalysisMetrics, CodeDebtScore, CombinedAnalysis, FileAnalysis } from "./types";
+import { FolderStructure } from "./types/index";
 
 export class MasterAgent {
 	private analysisAgent: AnalysisAgent;
@@ -13,6 +15,7 @@ export class MasterAgent {
 	private summaryAgent: SummaryAgent;
 	private workflow: RunnableSequence;
 	private documentAnalysis?: DocumentAnalysis;
+	private logger: Logger;
 
 	constructor() {
 		const opinions = fs.readFileSync(path.join(process.cwd(), "opinions.md"), "utf8");
@@ -20,6 +23,7 @@ export class MasterAgent {
 		this.metricsCompute = new MetricsCompute();
 		this.summaryAgent = new SummaryAgent();
 		this.workflow = this.buildWorkflow();
+		this.logger = new Logger("MasterAgent");
 	}
 
 	public setDocumentAnalysis(analysis: DocumentAnalysis) {
@@ -31,7 +35,7 @@ export class MasterAgent {
 		return RunnableSequence.from([
 			// Step 1: Analyze files
 			async (input: { directory: string; excludePatterns: string[] }) => {
-				console.log("Step 1: Analyzing files...");
+				this.logger.log("Step 1: Analyzing files...");
 				await this.analysisAgent.analyze(input);
 				return {
 					...input,
@@ -44,7 +48,7 @@ export class MasterAgent {
 				excludePatterns: string[];
 				fileAnalyses: Map<string, FileAnalysis>;
 			}) => {
-				console.log("Step 2: Combining analyses...");
+				this.logger.log("Step 2: Combining analyses...");
 				const analysisResults = await this.analysisAgent.getResults();
 				return {
 					...state,
@@ -63,7 +67,7 @@ export class MasterAgent {
 				fileAnalyses: Map<string, FileAnalysis>;
 				combinedAnalysis: CombinedAnalysis;
 			}) => {
-				console.log("Step 3: Computing metrics...");
+				this.logger.log("Step 3: Computing metrics...");
 				const metrics = await this.metricsCompute.computeMetrics();
 				return {
 					...state,
@@ -80,7 +84,7 @@ export class MasterAgent {
 				metrics: AnalysisMetrics;
 				folderStructure: any;
 			}) => {
-				console.log("Step 4: Computing scores...");
+				this.logger.log("Step 4: Computing scores...");
 				// TODO: Call the ComputeScores agent here
 				// For now, return a dummy score
 				const scores: CodeDebtScore = {
@@ -108,10 +112,10 @@ export class MasterAgent {
 				fileAnalyses: Map<string, FileAnalysis>;
 				combinedAnalysis: CombinedAnalysis;
 				metrics: AnalysisMetrics;
-				folderStructure: any;
+				folderStructure: FolderStructure;
 				scores: CodeDebtScore;
 			}) => {
-				console.log("Step 5: Generating summary...");
+				this.logger.log("Step 5: Generating summary...");
 				const summaryPath = await this.summaryAgent.generateSummary(state.metrics, state.folderStructure);
 				return {
 					...state,
@@ -135,6 +139,7 @@ export class MasterAgent {
 		summaryPath: string;
 	}> {
 		if (!this.documentAnalysis) {
+			this.logger.error("Document analysis not set. Call setDocumentAnalysis first.");
 			throw new Error("Document analysis not set. Call setDocumentAnalysis first.");
 		}
 

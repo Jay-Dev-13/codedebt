@@ -1,37 +1,17 @@
-/*
-    This file is responsible for computing the metrics of the code debt analysis.
-    Any kind of metric can be computed here.
-
-    This does not need to be a separate agent.
-    It can be part of the analysis agent.
-
-    Also, we need to analyze the folder structure of the provided codebase.
-    This will help us to understand the codebase and the dependencies between the files.
-*/
-
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
+import { Logger } from "../logger";
 import { AnalysisMetrics, FileAnalysis, Problem } from "../types";
-
-interface FolderStructure {
-	name: string;
-	type: "file" | "directory";
-	children?: FolderStructure[];
-	metrics?: {
-		totalFiles: number;
-		totalIssues: number;
-		issuesByType: Record<string, number>;
-		issuesBySeverity: Record<string, number>;
-	};
-}
-
+import { FolderStructure } from "../types/index";
 export class MetricsCompute {
 	private baseDir: string;
 	private resultsDir: string;
+	private logger: Logger;
 
 	constructor(baseDir: string = "results/analysis") {
 		this.baseDir = baseDir;
 		this.resultsDir = join(this.baseDir, "results");
+		this.logger = new Logger("MetricsCompute");
 	}
 
 	private async getAnalysisResults(): Promise<Record<string, FileAnalysis>> {
@@ -66,7 +46,23 @@ export class MetricsCompute {
 		if (typeof analysis !== "string") {
 			return [];
 		}
+		// Try to parse as JSON first
+		try {
+			const parsed = JSON.parse(analysis);
+			if (Array.isArray(parsed.issues)) {
+				return parsed.issues.map((issue: any) => ({
+					type: issue.type,
+					severity: issue.severity,
+					description: issue.description || "",
+					location: { file: "", lineNumbers: undefined, functionName: undefined },
+					// Add other mappings if needed
+				}));
+			}
+		} catch {
+			// Not JSON, fall through to text parsing
+		}
 
+		// Fallback: old text parsing logic
 		const problems: Problem[] = [];
 		const lines = analysis.split("\n");
 		let currentProblem: Partial<Problem> = {};
@@ -106,6 +102,21 @@ export class MetricsCompute {
 	private countLines(analysis: string | { error: string }): number {
 		if (typeof analysis !== "string") {
 			return 0;
+		}
+		// Try to parse as JSON first
+		try {
+			const parsed = JSON.parse(analysis);
+			if (Array.isArray(parsed.issues)) {
+				// Count total lines in all issue descriptions
+				return parsed.issues.reduce((sum: number, issue: any) => {
+					if (issue.description) {
+						return sum + issue.description.split("\n").length;
+					}
+					return sum;
+				}, 0);
+			}
+		} catch {
+			// Not JSON, fall through
 		}
 		return analysis.split("\n").length;
 	}
@@ -148,6 +159,7 @@ export class MetricsCompute {
 	private async analyzeFolderStructure(directory: string): Promise<FolderStructure> {
 		const structure: FolderStructure = {
 			name: directory,
+			path: directory,
 			type: "directory",
 			children: [],
 			metrics: {
@@ -209,34 +221,34 @@ export class MetricsCompute {
 	}
 
 	public async computeMetrics(): Promise<AnalysisMetrics & { folderStructure: FolderStructure }> {
-		console.info("Computing metrics...");
+		this.logger.info("Computing metrics...");
 		const analysisResults = await this.getAnalysisResults();
 
 		// Compute different types of metrics
 		const { issuesPerType, issuesPerSeverity } = this.computeIssueDistribution(analysisResults);
-		console.info("Issues categorized by type and severity");
+		this.logger.info("Issues categorized by type and severity");
 		const issuesPerFile = this.computeFileMetrics(analysisResults);
-		console.info("Issues categorized by file");
+		this.logger.info("Issues categorized by file");
 
 		// Calculate total issues
 		const totalIssues = Array.from(issuesPerFile.values()).reduce((sum, count) => sum + count, 0);
-		console.info("Total issues", totalIssues);
+		this.logger.info("Total issues", totalIssues);
 
 		// Calculate average issues per 1000 lines
 		const totalLines = Object.values(analysisResults).reduce((sum, analysis) => sum + analysis.lineCount, 0);
 		const averageIssuesPer1000Lines = (totalIssues / totalLines) * 1000;
-		console.info("Average issues per 1000 lines", averageIssuesPer1000Lines);
+		this.logger.info("Average issues per 1000 lines", averageIssuesPer1000Lines);
 
 		// Get files with highest issues
 		const filesWithHighestIssues = Array.from(issuesPerFile.entries())
 			.sort((a, b) => b[1] - a[1])
 			.slice(0, 5)
 			.map(([file, count]) => ({ file, count }));
-		console.info("Files with highest issues", filesWithHighestIssues);
+		this.logger.info("Files with highest issues", filesWithHighestIssues);
 
 		// Analyze folder structure
 		const folderStructure = await this.analyzeFolderStructure(this.resultsDir);
-		console.info("Folder structure", folderStructure);
+		this.logger.info("Folder structure", folderStructure);
 
 		return {
 			totalIssues,

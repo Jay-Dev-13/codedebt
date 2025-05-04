@@ -1,16 +1,5 @@
 import { AnalysisMetrics } from "../types";
-
-interface FolderStructure {
-	name: string;
-	type: "file" | "directory";
-	children?: FolderStructure[];
-	metrics?: {
-		totalFiles: number;
-		totalIssues: number;
-		issuesByType: Record<string, number>;
-		issuesBySeverity: Record<string, number>;
-	};
-}
+import { FolderStructure } from "../types/index";
 
 export const PROMPTS = {
 	CODE_DEBT_ANALYSIS: (opinions: string, filePath: string, content: string, similarChunks?: string[]) =>
@@ -29,37 +18,41 @@ export const PROMPTS = {
 				: ""
 		}
 
-      Provide a list of issues found in the code.
-      1. Number of total issues found.
-      2. Number of issues per severity.
-      3. For each issue, provide the following properties:
-      - Type of issue
-      - Frequency
-      - Severity (1 [Lowest] - 10 [Highest])
-      - Function/Class Names that are affected
-      - How confident are you that this is an issue? (1 [Not confident] - 10 [Very confident])
+      IMPORTANT: Your response MUST be a valid JSON object with the following schema:
+      {
+          "totalIssues": number,
+          "issuesBySeverity": { [severity: string]: {score: number, issues: string[]} },
+          "issues": [
+              {
+                  "type": string,
+                  "frequency": number,
+                  "severity": number (1-10),
+                  "affectedComponents": string[],
+                  "confidence": number (1-10)
+              }
+          ]
+      }
 
       Do's:
-      - Highlight any violations of the project opinions and standards.
-      - Frame the output in a way that is easy to consume by another LLM model.
-      - Consider patterns from similar code chunks when analyzing issues.
+      - Ensure your response is VALID JSON matching the schema above
+      - Highlight any violations of the project opinions and standards
+      - Consider patterns from similar code chunks when analyzing issues
       
       Don'ts:
-      - Suggest improvements.
-      - Suggest fixes.
-      - Suggest code changes.
-      - Have human like language.
-      - Be verbose.
-      - Mention the project opinions and standards in your output.
-
-      Notes:
-      - The original code will not be accessible in the next step. So make sure to provide enough information so that the original code can be reconstructed.
-      - If similar code chunks are provided, use them to identify patterns and potential issues that might be common across the codebase.
+      - Include any text outside the JSON object
+      - Suggest improvements or fixes
+      - Use human-like language
+      - Be verbose
+      - Mention the project opinions and standards in your output
 
       Here's the code to analyze:
       ${content}`,
 
-	CODE_DEBT_SUMMARY: (input: {
+	CODE_DEBT_SUMMARY: ({
+		analysisResults,
+		metrics,
+		folderStructure,
+	}: {
 		analysisResults: Record<string, any>;
 		metrics: AnalysisMetrics;
 		folderStructure: FolderStructure;
@@ -95,6 +88,13 @@ export const PROMPTS = {
 
       Make the summary comprehensive and informative.
 
-      Here are the analysis results:
-      ${JSON.stringify(input, null, 2)}`,
+      Analysis Results:
+      ${JSON.stringify(analysisResults, null, 2)}
+
+      Metrics:
+      ${JSON.stringify(metrics, null, 2)}
+
+      Folder Structure:
+      ${JSON.stringify(folderStructure, null, 2)}
+      `,
 };
